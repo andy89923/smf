@@ -6,14 +6,12 @@ import (
 	"math"
 	"net"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 
-	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
-	"github.com/free5gc/openapi/Nnrf_NFManagement"
-	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/oauth"
 	"github.com/free5gc/pfcp/pfcpType"
@@ -49,6 +47,7 @@ type SMFContext struct {
 	ListenAddr   string
 
 	UDMProfile models.NfProfile
+	NfProfile  NFProfile
 
 	Key    string
 	PEM    string
@@ -56,26 +55,31 @@ type SMFContext struct {
 
 	SnssaiInfos []*SnssaiSmfInfo
 
-	NrfUri                         string
-	NrfCertPem                     string
-	NFManagementClient             *Nnrf_NFManagement.APIClient
-	NFDiscoveryClient              *Nnrf_NFDiscovery.APIClient
-	SubscriberDataManagementClient *Nudm_SubscriberDataManagement.APIClient
-	Locality                       string
-	AssocFailAlertInterval         time.Duration
-	AssocFailRetryInterval         time.Duration
-	OAuth2Required                 bool
+	NrfUri                 string
+	NrfCertPem             string
+	Locality               string
+	AssocFailAlertInterval time.Duration
+	AssocFailRetryInterval time.Duration
+	OAuth2Required         bool
 
 	UserPlaneInformation  *UserPlaneInformation
 	Ctx                   context.Context
 	PFCPCancelFunc        context.CancelFunc
 	PfcpHeartbeatInterval time.Duration
 
+	PfcpHeartbeatRetries   int
+	PfcpHeartbeatTolerance int
+	PfcpHeartbeatTimeout   time.Duration
+
+	SmContextPool    sync.Map
+	CanonicalRef     sync.Map
+	SeidSMContextMap sync.Map
+
 	// Now only "IPv4" supported
 	// TODO: support "IPv6", "IPv4v6", "Ethernet"
 	SupportedPDUSessionType string
 
-	//*** For ULCL ** //
+	// *** For ULCL *** //
 	ULCLSupport         bool
 	ULCLGroups          map[string][]string
 	UEPreConfigPathPool map[string]*UEPreConfigPaths
@@ -84,6 +88,92 @@ type SMFContext struct {
 
 	// Each pdu session should have a unique charging id
 	ChargingIDGenerator *idgenerator.IDGenerator
+}
+
+/*
+func (smfContext *SMFContext) ProcEachSMContext(procFunc func(*SMContext) bool) {
+	smfContext.SmContextPool.Range(func(key, value interface{}) bool {
+		smContext := value.(*SMContext)
+		return procFunc(smContext) // processing function determines if loop continues
+	})
+}*/
+
+func canonicalName(id string, pduSessID int32) string {
+	return fmt.Sprintf("%s-%d", id, pduSessID)
+}
+
+func (smfContext *SMFContext) ResolveRef(id string, pduSessID int32) (string, error) {
+	if value, ok := smfContext.CanonicalRef.Load(canonicalName(id, pduSessID)); ok {
+		ref := value.(string)
+		return ref, nil
+	} else {
+		return "", fmt.Errorf("UE[%s] - PDUSessionID[%d] not found in SMFContext", id, pduSessID)
+	}
+}
+
+// *** add unit test ***//
+func (smfContext *SMFContext) GetSMContextByRef(ref string) *SMContext {
+	// TODO: neu schreiben, ProcEachSMContext nutzen
+	var smCtx *SMContext
+	if value, ok := smfContext.SmContextPool.Load(ref); ok {
+		smCtx = value.(*SMContext)
+	}
+	return smCtx
+}
+
+func (smfContext *SMFContext) GetSMContextById(id string, pduSessID int32) *SMContext {
+	// TODO: neu schreiben, ProcEachSMContext nutzen
+	var smCtx *SMContext
+	ref, err := smfContext.ResolveRef(id, pduSessID)
+	if err != nil {
+		return nil
+	}
+	if value, ok := smfContext.SmContextPool.Load(ref); ok {
+		smCtx = value.(*SMContext)
+	}
+	return smCtx
+}
+
+// *** add unit test ***//
+func (smfContext *SMFContext) RemoveSMContext(smContext *SMContext) {
+	logger.CtxLog.Traceln("In RemoveSMContext")
+
+	for _, dataPath := range smContext.Tunnel.DataPathPool {
+		// TODO: free PDR IDs?
+		dataPath.DeactivateTunnelAndPDR(smContext)
+	}
+
+	// free UE IP
+	if smContext.SelectedUPF != nil && smContext.PDUAddress != nil {
+		logger.PduSessLog.Infof("UE[%s] PDUSessionID[%d] Release IP[%s]",
+			smContext.Supi, smContext.PDUSessionID, smContext.PDUAddress.String())
+		GetUserPlaneInformation().
+			ReleaseUEIP(smContext.SelectedUPF, smContext.PDUAddress, smContext.UseStaticIP)
+		smContext.SelectedUPF = nil
+	}
+
+	// TODO: what about PFCP session rules?
+
+	// TODO: still required or done elsewhere?
+	for _, pfcpSessionContext := range smContext.PFCPSessionContexts {
+		smfContext.SeidSMContextMap.Delete(pfcpSessionContext.LocalSEID)
+	}
+
+	ReleaseTEID(smContext.LocalULTeid)
+	ReleaseTEID(smContext.LocalDLTeid)
+
+	smfContext.SmContextPool.Delete(smContext.Ref)
+	smfContext.CanonicalRef.Delete(canonicalName(smContext.Supi, smContext.PDUSessionID))
+	smContext.Log.Infof("smContext[%s] is deleted from pool", smContext.Ref)
+}
+
+// *** add unit test ***//
+func (smfContext *SMFContext) GetSMContextBySEID(seid uint64) *SMContext {
+	if value, ok := smfContext.SeidSMContextMap.Load(seid); ok {
+		smContext := value.(*SMContext)
+		return smContext
+	}
+	return nil
 }
 
 func GenerateChargingID() int32 {
@@ -112,17 +202,17 @@ func (s *SMFContext) ListenIP() net.IP {
 }
 
 // RetrieveDnnInformation gets the corresponding dnn info from S-NSSAI and DNN
-func RetrieveDnnInformation(Snssai *models.Snssai, dnn string) *SnssaiSmfDnnInfo {
+func RetrieveDnnInformation(snssai *models.Snssai, dnn string) *SnssaiSmfDnnInfo {
 	for _, snssaiInfo := range GetSelf().SnssaiInfos {
-		if snssaiInfo.Snssai.EqualModelsSnssai(Snssai) {
+		if snssaiInfo.Snssai.EqualModelsSnssai(snssai) {
 			return snssaiInfo.DnnInfos[dnn]
 		}
 	}
 	return nil
 }
 
-func AllocateLocalSEID() uint64 {
-	return atomic.AddUint64(&smfContext.LocalSEIDCount, 1)
+func (s *SMFContext) AllocateLocalSEID() uint64 {
+	return atomic.AddUint64(&s.LocalSEIDCount, 1)
 }
 
 func InitSmfContext(config *factory.Config) {
@@ -202,14 +292,14 @@ func InitSmfContext(config *factory.Config) {
 		}
 
 		smfContext.PfcpHeartbeatInterval = pfcp.HeartbeatInterval
-
+		var multipleOfInterval time.Duration = 5
 		if pfcp.AssocFailAlertInterval == 0 {
-			smfContext.AssocFailAlertInterval = 5 * time.Minute
+			smfContext.AssocFailAlertInterval = multipleOfInterval * time.Minute
 		} else {
 			smfContext.AssocFailAlertInterval = pfcp.AssocFailAlertInterval
 		}
 		if pfcp.AssocFailRetryInterval == 0 {
-			smfContext.AssocFailRetryInterval = 5 * time.Second
+			smfContext.AssocFailRetryInterval = multipleOfInterval * time.Second
 		} else {
 			smfContext.AssocFailRetryInterval = pfcp.AssocFailRetryInterval
 		}
@@ -240,15 +330,6 @@ func InitSmfContext(config *factory.Config) {
 		smfContext.SnssaiInfos = append(smfContext.SnssaiInfos, &snssaiInfo)
 	}
 
-	// Set client and set url
-	ManagementConfig := Nnrf_NFManagement.NewConfiguration()
-	ManagementConfig.SetBasePath(GetSelf().NrfUri)
-	smfContext.NFManagementClient = Nnrf_NFManagement.NewAPIClient(ManagementConfig)
-
-	NFDiscovryConfig := Nnrf_NFDiscovery.NewConfiguration()
-	NFDiscovryConfig.SetBasePath(GetSelf().NrfUri)
-	smfContext.NFDiscoveryClient = Nnrf_NFDiscovery.NewAPIClient(NFDiscovryConfig)
-
 	smfContext.ULCLSupport = configuration.ULCL
 
 	smfContext.SupportedPDUSessionType = "IPv4"
@@ -257,7 +338,7 @@ func InitSmfContext(config *factory.Config) {
 
 	smfContext.ChargingIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 
-	SetupNFProfile(config)
+	smfContext.SetupNFProfile(config)
 
 	smfContext.Locality = configuration.Locality
 

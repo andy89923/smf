@@ -31,6 +31,7 @@ const (
 	SmfEventExposureResUriPrefix = "/nsmf_event-exposure/v1"
 	SmfPdusessionResUriPrefix    = "/nsmf-pdusession/v1"
 	SmfOamUriPrefix              = "/nsmf-oam/v1"
+	SmfCallbackUriPrefix         = "/nsmf-callback"
 	NrfDiscUriPrefix             = "/nnrf-disc/v1"
 	UdmSdmUriPrefix              = "/nudm-sdm/v1"
 	PcfSmpolicycontrolUriPrefix  = "/npcf-smpolicycontrol/v1"
@@ -131,7 +132,7 @@ func (c *Configuration) validate() (bool, error) {
 	}
 
 	for _, snssaiInfo := range c.SNssaiInfo {
-		if result, err := snssaiInfo.validate(); err != nil {
+		if result, err := snssaiInfo.Validate(); err != nil {
 			return result, err
 		}
 	}
@@ -165,17 +166,19 @@ type SnssaiInfoItem struct {
 	DnnInfos []*SnssaiDnnInfoItem `yaml:"dnnInfos" valid:"required"`
 }
 
-func (s *SnssaiInfoItem) validate() (bool, error) {
+func (s *SnssaiInfoItem) Validate() (bool, error) {
 	if snssai := s.SNssai; snssai != nil {
 		if result := (snssai.Sst >= 0 && snssai.Sst <= 255); !result {
 			err := errors.New("Invalid sNssai.Sst: " + strconv.Itoa(int(snssai.Sst)) + ", should be in range 0~255.")
 			return false, err
 		}
 
-		if result := govalidator.StringMatches(snssai.Sd, "^[0-9A-Fa-f]{6}$"); !result {
-			err := errors.New("Invalid sNssai.Sd: " + snssai.Sd +
-				", should be 3 bytes hex string and in range 000000~FFFFFF.")
-			return false, err
+		if snssai.Sd != "" {
+			if result := govalidator.StringMatches(snssai.Sd, "^[0-9A-Fa-f]{6}$"); !result {
+				err := errors.New("Invalid sNssai.Sd: " + snssai.Sd +
+					", should be 3 bytes hex string and in range 000000~FFFFFF.")
+				return false, err
+			}
 		}
 	}
 
@@ -474,9 +477,7 @@ func (u *UserPlaneInformation) validate() (bool, error) {
 // UPNode represent the user plane node
 type UPNode struct {
 	Type                 string                  `json:"type" yaml:"type" valid:"upNodeType,required"`
-	NodeID               string                  `json:"nodeID" yaml:"nodeID" valid:"host,optional"`
-	Addr                 string                  `json:"addr" yaml:"addr" valid:"host,optional"`
-	ANIP                 string                  `json:"anIP" yaml:"anIP" valid:"host,optional"`
+	NodeID               string                  `json:"nodeID" yaml:"nodeID" valid:"host,required"`
 	Dnn                  string                  `json:"dnn" yaml:"dnn" valid:"type(string),minstringlength(1),optional"`
 	SNssaiInfos          []*SnssaiUpfInfoItem    `json:"sNssaiUpfInfos" yaml:"sNssaiUpfInfos,omitempty" valid:"optional"`
 	InterfaceUpfInfoList []*InterfaceUpfInfoItem `json:"interfaces" yaml:"interfaces,omitempty" valid:"optional"`
@@ -488,7 +489,7 @@ func (u *UPNode) validate() (bool, error) {
 	})
 
 	for _, snssaiInfo := range u.SNssaiInfos {
-		if result, err := snssaiInfo.validate(); err != nil {
+		if result, err := snssaiInfo.Validate(); err != nil {
 			return result, err
 		}
 	}
@@ -546,17 +547,19 @@ type SnssaiUpfInfoItem struct {
 	DnnUpfInfoList []*DnnUpfInfoItem `json:"dnnUpfInfoList" yaml:"dnnUpfInfoList" valid:"required"`
 }
 
-func (s *SnssaiUpfInfoItem) validate() (bool, error) {
+func (s *SnssaiUpfInfoItem) Validate() (bool, error) {
 	if s.SNssai != nil {
 		if result := (s.SNssai.Sst >= 0 && s.SNssai.Sst <= 255); !result {
 			err := errors.New("Invalid sNssai.Sst: " + strconv.Itoa(int(s.SNssai.Sst)) + ", should be in range 0~255.")
 			return false, err
 		}
 
-		if result := govalidator.StringMatches(s.SNssai.Sd, "^[0-9A-Fa-f]{6}$"); !result {
-			err := errors.New("Invalid sNssai.Sd: " + s.SNssai.Sd +
-				", should be 3 bytes hex string and in range 000000~FFFFFF.")
-			return false, err
+		if s.SNssai.Sd != "" {
+			if result := govalidator.StringMatches(s.SNssai.Sd, "^[0-9A-Fa-f]{6}$"); !result {
+				err := errors.New("Invalid sNssai.Sd: " + s.SNssai.Sd +
+					", should be 3 bytes hex string and in range 000000~FFFFFF.")
+				return false, err
+			}
 		}
 	}
 
@@ -625,7 +628,8 @@ type UEIPPool struct {
 
 func (u *UEIPPool) validate() (bool, error) {
 	govalidator.TagMap["cidr"] = govalidator.Validator(func(str string) bool {
-		return govalidator.IsCIDR(str)
+		isCIDR := govalidator.IsCIDR(str)
+		return isCIDR
 	})
 
 	result, err := govalidator.ValidateStruct(u)
@@ -640,7 +644,8 @@ type SpecificPath struct {
 
 func (p *SpecificPath) validate() (bool, error) {
 	govalidator.TagMap["cidr"] = govalidator.Validator(func(str string) bool {
-		return govalidator.IsCIDR(str)
+		isCIDR := govalidator.IsCIDR(str)
+		return isCIDR
 	})
 
 	for _, upf := range p.Path {
@@ -777,4 +782,25 @@ func (c *Config) GetLogReportCaller() bool {
 		return false
 	}
 	return c.Logger.ReportCaller
+}
+
+func (c *Config) GetSbiScheme() string {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Configuration != nil && c.Configuration.Sbi != nil && c.Configuration.Sbi.Scheme != "" {
+		return c.Configuration.Sbi.Scheme
+	}
+	return SmfSbiDefaultScheme
+}
+
+func (c *Config) GetCertPemPath() string {
+	c.RLock()
+	defer c.RUnlock()
+	return c.Configuration.Sbi.Tls.Pem
+}
+
+func (c *Config) GetCertKeyPath() string {
+	c.RLock()
+	defer c.RUnlock()
+	return c.Configuration.Sbi.Tls.Key
 }

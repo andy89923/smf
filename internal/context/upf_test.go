@@ -1,20 +1,30 @@
-package context
+package context_test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
 
+	"github.com/google/uuid"
 	. "github.com/smartystreets/goconvey/convey"
 
 	"github.com/free5gc/nas/nasMessage"
+	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
+	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
-var mockIPv4NodeID = &pfcpType.NodeID{
-	NodeIdType: pfcpType.NodeIdTypeIpv4Address,
-	IP:         net.ParseIP("127.0.0.1"),
+var mockUPNode = &smf_context.UPNode{
+	Name: "UPF1",
+	Type: smf_context.UPNODE_UPF,
+	ID:   uuid.New(),
+	NodeID: pfcpType.NodeID{
+		NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+		IP:         net.ParseIP("127.0.0.1"),
+	},
+	Dnn: "internet",
 }
 
 var mockIfaces = []*factory.InterfaceUpfInfoItem{
@@ -25,8 +35,29 @@ var mockIfaces = []*factory.InterfaceUpfInfoItem{
 	},
 }
 
-func convertPDUSessTypeToString(PDUtype uint8) string {
-	switch PDUtype {
+var mockUpfSNssaiInfos = []*factory.SnssaiUpfInfoItem{
+	{
+		SNssai: &models.Snssai{
+			Sst: 1,
+			Sd:  "010203",
+		},
+		DnnUpfInfoList: []*factory.DnnUpfInfoItem{
+			{
+				Dnn:      "internet",
+				DnaiList: []string{"mec"},
+				PduSessionTypes: []models.PduSessionType{
+					models.PduSessionType_IPV4,
+				},
+				Pools: []*factory.UEIPPool{
+					{Cidr: "10.60.0.0/16"},
+				},
+			},
+		},
+	},
+}
+
+func convertPDUSessTypeToString(pduType uint8) string {
+	switch pduType {
 	case nasMessage.PDUSessionTypeIPv4:
 		return "PDU Session Type IPv4"
 	case nasMessage.PDUSessionTypeIPv6:
@@ -44,7 +75,7 @@ func convertPDUSessTypeToString(PDUtype uint8) string {
 
 func TestIP(t *testing.T) {
 	testCases := []struct {
-		input               *UPFInterfaceInfo
+		input               *smf_context.UPFInterfaceInfo
 		inputPDUSessionType uint8
 		paramStr            string
 		resultStr           string
@@ -52,7 +83,7 @@ func TestIP(t *testing.T) {
 		expectedError       error
 	}{
 		{
-			input: &UPFInterfaceInfo{
+			input: &smf_context.UPFInterfaceInfo{
 				NetworkInstances:      []string{""},
 				IPv4EndPointAddresses: []net.IP{net.ParseIP("8.8.8.8")},
 				IPv6EndPointAddresses: []net.IP{net.ParseIP("2001:4860:4860::8888")},
@@ -64,7 +95,7 @@ func TestIP(t *testing.T) {
 			expectedError:       nil,
 		},
 		{
-			input: &UPFInterfaceInfo{
+			input: &smf_context.UPFInterfaceInfo{
 				NetworkInstances:      []string{""},
 				IPv4EndPointAddresses: []net.IP{net.ParseIP("8.8.8.8")},
 				IPv6EndPointAddresses: []net.IP{net.ParseIP("2001:4860:4860::8888")},
@@ -100,14 +131,14 @@ func TestIP(t *testing.T) {
 func TestAddDataPath(t *testing.T) {
 	// AddDataPath is simple, should only have one case
 	testCases := []struct {
-		tunnel        *UPTunnel
-		addedDataPath *DataPath
+		tunnel        *smf_context.UPTunnel
+		addedDataPath *smf_context.DataPath
 		resultStr     string
 		expectedExist bool
 	}{
 		{
-			tunnel:        NewUPTunnel(),
-			addedDataPath: NewDataPath(),
+			tunnel:        smf_context.NewUPTunnel(),
+			addedDataPath: smf_context.NewDataPath(),
 			resultStr:     "Datapath should exist",
 			expectedExist: true,
 		},
@@ -137,23 +168,24 @@ func TestAddDataPath(t *testing.T) {
 
 func TestAddPDR(t *testing.T) {
 	testCases := []struct {
-		upf           *UPF
+		upf           *smf_context.UPF
 		resultStr     string
 		expectedError error
 	}{
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddPDR should success",
 			expectedError: nil,
 		},
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddPDR should fail",
-			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
+			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
 	}
 
-	testCases[0].upf.UPFStatus = AssociatedSetUpSuccess
+	testCases[0].upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+	testCases[0].upf.Association, testCases[0].upf.AssociationCancelFunc = context.WithCancel(context.Background())
 
 	Convey("AddPDR should indeed add PDR and report error appropiately", t, func() {
 		for i, testcase := range testCases {
@@ -180,23 +212,24 @@ func TestAddPDR(t *testing.T) {
 
 func TestAddFAR(t *testing.T) {
 	testCases := []struct {
-		upf           *UPF
+		upf           *smf_context.UPF
 		resultStr     string
 		expectedError error
 	}{
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddFAR should success",
 			expectedError: nil,
 		},
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddFAR should fail",
-			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
+			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
 	}
 
-	testCases[0].upf.UPFStatus = AssociatedSetUpSuccess
+	testCases[0].upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+	testCases[0].upf.Association, testCases[0].upf.AssociationCancelFunc = context.WithCancel(context.Background())
 
 	Convey("AddFAR should indeed add FAR and report error appropiately", t, func() {
 		for i, testcase := range testCases {
@@ -223,23 +256,24 @@ func TestAddFAR(t *testing.T) {
 
 func TestAddQER(t *testing.T) {
 	testCases := []struct {
-		upf           *UPF
+		upf           *smf_context.UPF
 		resultStr     string
 		expectedError error
 	}{
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddQER should success",
 			expectedError: nil,
 		},
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddQER should fail",
-			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
+			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
 	}
 
-	testCases[0].upf.UPFStatus = AssociatedSetUpSuccess
+	testCases[0].upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+	testCases[0].upf.Association, testCases[0].upf.AssociationCancelFunc = context.WithCancel(context.Background())
 
 	Convey("AddQER should indeed add QER and report error appropiately", t, func() {
 		for i, testcase := range testCases {
@@ -266,23 +300,24 @@ func TestAddQER(t *testing.T) {
 
 func TestAddBAR(t *testing.T) {
 	testCases := []struct {
-		upf           *UPF
+		upf           *smf_context.UPF
 		resultStr     string
 		expectedError error
 	}{
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddBAR should success",
 			expectedError: nil,
 		},
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddBAR should fail",
-			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
+			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
 	}
 
-	testCases[0].upf.UPFStatus = AssociatedSetUpSuccess
+	testCases[0].upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+	testCases[0].upf.Association, testCases[0].upf.AssociationCancelFunc = context.WithCancel(context.Background())
 
 	Convey("AddBAR should indeed add BAR and report error appropiately", t, func() {
 		for i, testcase := range testCases {

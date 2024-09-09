@@ -40,10 +40,10 @@ func strNgapCause(cause *ngapType.Cause) string {
 	return ret
 }
 
-func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) (err error) {
+func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) error {
 	resourceSetupResponseTransfer := ngapType.PDUSessionResourceSetupResponseTransfer{}
 
-	err = aper.UnmarshalWithParams(b, &resourceSetupResponseTransfer, "valueExt")
+	err := aper.UnmarshalWithParams(b, &resourceSetupResponseTransfer, "valueExt")
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) (er
 
 	GTPTunnel := QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
 
-	ctx.Tunnel.UpdateANInformation(
+	ctx.UpdateANInformation(
 		GTPTunnel.TransportLayerAddress.Value.Bytes,
 		binary.BigEndian.Uint32(GTPTunnel.GTPTEID.Value))
 
@@ -79,7 +79,7 @@ func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) er
 	if DLInfo := resourceModifyResponseTransfer.DLNGUUPTNLInformation; DLInfo != nil {
 		GTPTunnel := DLInfo.GTPTunnel
 
-		ctx.Tunnel.UpdateANInformation(
+		ctx.UpdateANInformation(
 			GTPTunnel.TransportLayerAddress.Value.Bytes,
 			binary.BigEndian.Uint32(GTPTunnel.GTPTEID.Value))
 	}
@@ -104,10 +104,10 @@ func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) er
 	return nil
 }
 
-func HandlePDUSessionResourceSetupUnsuccessfulTransfer(b []byte, ctx *SMContext) (err error) {
+func HandlePDUSessionResourceSetupUnsuccessfulTransfer(b []byte, ctx *SMContext) error {
 	resourceSetupUnsuccessfulTransfer := ngapType.PDUSessionResourceSetupUnsuccessfulTransfer{}
 
-	err = aper.UnmarshalWithParams(b, &resourceSetupUnsuccessfulTransfer, "valueExt")
+	err := aper.UnmarshalWithParams(b, &resourceSetupUnsuccessfulTransfer, "valueExt")
 	if err != nil {
 		return err
 	}
@@ -151,7 +151,7 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) error {
 
 	GTPTunnel := pathSwitchRequestTransfer.DLNGUUPTNLInformation.GTPTunnel
 
-	ctx.Tunnel.UpdateANInformation(
+	ctx.UpdateANInformation(
 		GTPTunnel.TransportLayerAddress.Value.Bytes,
 		binary.BigEndian.Uint32(GTPTunnel.GTPTEID.Value))
 
@@ -190,10 +190,10 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) error {
 	return nil
 }
 
-func HandlePathSwitchRequestSetupFailedTransfer(b []byte, ctx *SMContext) (err error) {
+func HandlePathSwitchRequestSetupFailedTransfer(b []byte, ctx *SMContext) error {
 	pathSwitchRequestSetupFailedTransfer := ngapType.PathSwitchRequestSetupFailedTransfer{}
 
-	err = aper.UnmarshalWithParams(b, &pathSwitchRequestSetupFailedTransfer, "valueExt")
+	err := aper.UnmarshalWithParams(b, &pathSwitchRequestSetupFailedTransfer, "valueExt")
 	if err != nil {
 		return err
 	}
@@ -202,10 +202,10 @@ func HandlePathSwitchRequestSetupFailedTransfer(b []byte, ctx *SMContext) (err e
 	return nil
 }
 
-func HandleHandoverRequiredTransfer(b []byte, ctx *SMContext) (err error) {
+func HandleHandoverRequiredTransfer(b []byte, ctx *SMContext) error {
 	handoverRequiredTransfer := ngapType.HandoverRequiredTransfer{}
 
-	err = aper.UnmarshalWithParams(b, &handoverRequiredTransfer, "valueExt")
+	err := aper.UnmarshalWithParams(b, &handoverRequiredTransfer, "valueExt")
 
 	directForwardingPath := handoverRequiredTransfer.DirectForwardingPathAvailability
 	if directForwardingPath != nil {
@@ -222,17 +222,17 @@ func HandleHandoverRequiredTransfer(b []byte, ctx *SMContext) (err error) {
 	return nil
 }
 
-func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) (err error) {
+func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) error {
 	handoverRequestAcknowledgeTransfer := ngapType.HandoverRequestAcknowledgeTransfer{}
 
-	err = aper.UnmarshalWithParams(b, &handoverRequestAcknowledgeTransfer, "valueExt")
+	err := aper.UnmarshalWithParams(b, &handoverRequestAcknowledgeTransfer, "valueExt")
 	if err != nil {
 		return err
 	}
 
 	DLNGUUPGTPTunnel := handoverRequestAcknowledgeTransfer.DLNGUUPTNLInformation.GTPTunnel
 
-	ctx.Tunnel.UpdateANInformation(
+	ctx.UpdateANInformation(
 		DLNGUUPGTPTunnel.TransportLayerAddress.Value.Bytes,
 		binary.BigEndian.Uint32(DLNGUUPGTPTunnel.GTPTEID.Value))
 
@@ -254,16 +254,16 @@ func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) (err err
 
 		var indirectFowardingPDR *PDR
 
-		if pdr, err := ANUPF.AddPDR(); err != nil {
-			return err
+		if pdr, errAddPDR := ANUPF.AddPDR(); errAddPDR != nil {
+			return errAddPDR
 		} else {
 			indirectFowardingPDR = pdr
 		}
 
 		originPDR := ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode.UpLinkTunnel.PDR
 
-		if teid, err := GenerateTEID(); err != nil {
-			return err
+		if teid, errGenerateTEID := GenerateTEID(); errGenerateTEID != nil {
+			return errGenerateTEID
 		} else {
 			ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.TEID = teid
 			ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.PDR = indirectFowardingPDR

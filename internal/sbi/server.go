@@ -103,6 +103,10 @@ func newRouter(s *Server) *gin.Engine {
 		}
 	}
 
+	smfNwdafOAMGroup := router.Group("/nwdaf-oam")
+	smfNwdafOAMRoutes := s.getNwdafOamRoutes()
+	applyRoutes(smfNwdafOAMGroup, smfNwdafOAMRoutes)
+
 	return router
 }
 

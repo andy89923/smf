@@ -75,10 +75,71 @@ func (p *Processor) ReleaseChargingSession(smContext *smf_context.SMContext) {
 	}
 }
 
+func (p *Processor) UpdateChargingSessionByPfcp(smContext *smf_context.SMContext) {
+	logger.ChargingLog.Errorln("Test: Send Update URR via PFCP SessionModification")
+
+	upfUrrMap := make(map[string][]*smf_context.URR)
+	for _, urr := range smContext.UrrUpfMap {
+		logger.ChargingLog.Warnln("Edit URR ID: ", urr.URRID)
+
+		upfId := smContext.ChargingInfo[urr.URRID].UpfId
+		upfUrrMap[upfId] = append(upfUrrMap[upfId], urr)
+	}
+
+	for upfId, urrList := range upfUrrMap {
+		upf := smf_context.GetUpfById(upfId)
+		if upf == nil {
+			logger.ChargingLog.Errorf("Cound not find upf %s", upfId)
+			continue
+		}
+
+		// Update urrList urr attributes
+		for _, urr := range urrList {
+			logger.ChargingLog.Warnf("%+v", urr)
+
+			if urr.MeasureMethod == "vol" {
+				urr.State = smf_context.RULE_UPDATE
+				urr.VolumeThreshold = min(5000, urr.VolumeThreshold+2000)
+			}
+		}
+
+		smContext.SetState(smf_context.PFCPModification)
+
+		var pfcpResponseStatus smf_context.PFCPSessionResponseStatus
+
+		rcvMsg, err_ := pfcp_message.SendPfcpSessionModificationRequest(
+			upf, smContext, nil, nil, nil, nil, urrList)
+		if err_ != nil {
+			logger.PduSessLog.Warnf("Sending PFCP Session Modification Request UPF error: %+v", err_)
+			pfcpResponseStatus = smf_context.SessionUpdateFailed
+		} else {
+			logger.PduSessLog.Infoln("Received PFCP Session Modification Response")
+			pfcpResponseStatus = smf_context.SessionUpdateSuccess
+		}
+
+		rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionModificationResponse)
+		if rsp.Cause == nil || rsp.Cause.CauseValue != pfcpType.CauseRequestAccepted {
+			logger.PduSessLog.Warn("Received PFCP Session Modification Not Accepted Response from AN UPF")
+			pfcpResponseStatus = smf_context.SessionUpdateFailed
+		}
+
+		switch pfcpResponseStatus {
+		case smf_context.SessionUpdateSuccess:
+			logger.PfcpLog.Warnln("In case SessionUpdateSuccess")
+			smContext.SetState(smf_context.Active)
+
+		case smf_context.SessionUpdateFailed:
+			logger.PfcpLog.Errorln("In case SessionUpdateFailed")
+			smContext.SetState(smf_context.Active)
+		}
+	}
+}
+
 // Report usage report to the CHF and update the URR with the charging information in the charging response
 func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) {
 	multipleUnitUsage := buildMultiUnitUsageFromUsageReport(smContext)
 
+	// If there is no usage report, do not send the charging request
 	if len(multipleUnitUsage) == 0 {
 		logger.ChargingLog.Infof("No report need to be charged")
 		return
@@ -109,8 +170,14 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 			}
 		}
 
+		// test code, delete it later
+		go func() {
+			time.Sleep(1 * time.Second)
+			p.UpdateChargingSessionByPfcp(smContext)
+		}()
+
 		if len(upfUrrMap) == 0 {
-			logger.ChargingLog.Infof("Do not have urr that need to update charging information")
+			logger.ChargingLog.Warnln("Do not have urr that need to update charging information")
 			return
 		}
 

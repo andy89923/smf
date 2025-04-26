@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	smContextPool    sync.Map
+	smContextPool    sync.Map // key: ref, value: *SMContext
 	canonicalRef     sync.Map
 	seidSMContextMap sync.Map
 )
@@ -324,10 +324,12 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 
 	if factory.SmfConfig != nil &&
 		factory.SmfConfig.Configuration != nil {
+
 		smContext.UrrReportTime = time.Duration(factory.SmfConfig.Configuration.UrrPeriod) * time.Second
 		smContext.UrrReportThreshold = factory.SmfConfig.Configuration.UrrThreshold
-		logger.CtxLog.Infof("UrrPeriod: %v", smContext.UrrReportTime)
-		logger.CtxLog.Infof("UrrThreshold: %d", smContext.UrrReportThreshold)
+
+		logger.CtxLog.Infof("UrrPeriod: %v, UrrThreshold: %d", smContext.UrrReportTime, smContext.UrrReportThreshold)
+
 		if factory.SmfConfig.Configuration.RequestedUnit != 0 {
 			smContext.RequestedUnit = factory.SmfConfig.Configuration.RequestedUnit
 		} else {

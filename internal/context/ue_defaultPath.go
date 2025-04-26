@@ -63,7 +63,13 @@ func findSourceInTopology(upi *UserPlaneInformation, topology []factory.UPLink) 
 	return "", errors.New("Not found AN node in topology")
 }
 
-func extractAnchorUPFForULCL(upi *UserPlaneInformation, source string, topology []factory.UPLink) ([]string, error) {
+func extractAnchorUPFForULCL(upi *UserPlaneInformation, source string, topology []factory.UPLink) (
+	[]string,
+	error,
+) {
+	// UPI not used, to surprond the error:
+	logger.CtxLog.Tracef("%v", upi)
+
 	upList := make([]string, 0)
 	visited := make(map[string]bool)
 	queue := make([]string, 0)

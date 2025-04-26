@@ -247,6 +247,8 @@ func (p *Processor) sendPDUSessionEstablishmentReject(
 	smContext *smf_context.SMContext,
 	nasErrorCause uint8,
 ) {
+	logger.PduSessLog.Debugf("sendPDUSessionEstablishmentReject, cause: %d", nasErrorCause)
+
 	smNasBuf, err := smf_context.BuildGSMPDUSessionEstablishmentReject(
 		smContext, nasMessage.Cause5GSMNetworkFailure)
 	if err != nil {

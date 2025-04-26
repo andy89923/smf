@@ -54,6 +54,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		p.HandlePDUSessionSMContextLocalRelease(dup_smCtx, createData)
 	}
 
+	// New SM Context
 	smContext := smf_context.NewSMContext(createData.Supi, createData.PduSessionId)
 	smContext.SetState(smf_context.ActivePending)
 	smContext.SmfPduSessionSmContextCreateData = createData

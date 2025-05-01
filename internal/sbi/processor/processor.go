@@ -1,6 +1,8 @@
 package processor
 
 import (
+	"sync"
+
 	"github.com/free5gc/smf/internal/sbi/consumer"
 	"github.com/free5gc/smf/pkg/app"
 )
@@ -17,11 +19,17 @@ type ProcessorSmf interface {
 
 type Processor struct {
 	ProcessorSmf
+
+	UrrLock              sync.Mutex
+	UrrReportCount       int
+	ChargingUrrThreshold uint64
 }
 
 func NewProcessor(smf ProcessorSmf) (*Processor, error) {
 	p := &Processor{
-		ProcessorSmf: smf,
+		ProcessorSmf:         smf,
+		UrrReportCount:       0,
+		ChargingUrrThreshold: smf.Config().Configuration.UrrThreshold,
 	}
 	return p, nil
 }

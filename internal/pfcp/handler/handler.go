@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp"
@@ -77,6 +78,9 @@ func HandlePfcpSessionSetDeletionRequest(msg *pfcpUdp.Message) {
 func HandlePfcpSessionSetDeletionResponse(msg *pfcpUdp.Message) {
 	logger.PfcpLog.Warnf("PFCP Session Set Deletion Response handling is not implemented")
 }
+
+var pfcpSessionReportRequestCount int = 0
+var pfcpSessionReportRequestCountLock = &sync.Mutex{}
 
 func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 	var cause pfcpType.Cause
@@ -197,6 +201,16 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 		// and update the URR with the quota or other charging information according to
 		// the charging response
 		service.GetApp().Processor().ReportUsageAndUpdateQuota(smContext)
+
+		// CTFang: This is a temporary solution to count the number of PFCP Session Report Requests
+		// and print it to the log.
+		go func() {
+			pfcpSessionReportRequestCountLock.Lock()
+			defer pfcpSessionReportRequestCountLock.Unlock()
+
+			pfcpSessionReportRequestCount++
+			logger.PfcpLog.Warnf("PFCP Session Report Request count: %d", pfcpSessionReportRequestCount)
+		}()
 	}
 
 	// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF

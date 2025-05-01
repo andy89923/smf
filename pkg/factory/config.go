@@ -113,10 +113,9 @@ func (c *Configuration) validate() (bool, error) {
 		}
 	}
 
-	if userPlaneInformation := &c.UserPlaneInformation; userPlaneInformation != nil {
-		if result, err := userPlaneInformation.validate(); err != nil {
-			return result, err
-		}
+	userPlaneInformation := &c.UserPlaneInformation
+	if result, err := userPlaneInformation.validate(); err != nil {
+		return result, err
 	}
 
 	for index, serviceName := range c.ServiceNameList {

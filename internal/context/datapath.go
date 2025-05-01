@@ -363,6 +363,9 @@ func (node DataPathNode) addUrrToNode(smContext *SMContext, urrId uint32, isMeas
 			logger.PduSessLog.Errorln("new URR failed")
 			return
 		}
+		// Do not need to save to smContext.UrrUpfMap
+		// since UrrUpfMap is used to save charging URR
+		// smContext.UrrUpfMap[id] = urr (X) No need to save
 	}
 
 	if urr != nil {
@@ -425,8 +428,10 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 
 	// Note: This should be after Activate Tunnels
 	if smContext.UrrReportTime != 0 || smContext.UrrReportThreshold != 0 {
-		dataPath.addUrrToPath(smContext)
-		logger.PduSessLog.Tracef("Create URR: UrrReportTime [%v],  UrrReportThreshold: [%v]",
+		// Create Default URR ID 1 ~ 6
+		// CTFang: remove default URR for now (testing)
+		// dataPath.addUrrToPath(smContext)
+		logger.PduSessLog.Warnf("Create URR: UrrReportTime [%v],  UrrReportThreshold: [%v]",
 			smContext.UrrReportTime, smContext.UrrReportThreshold)
 	} else {
 		logger.PduSessLog.Warn("No Create URR")

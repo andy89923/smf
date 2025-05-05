@@ -5,6 +5,7 @@ import (
 	"github.com/free5gc/openapi/chf/ConvergedCharging"
 	"github.com/free5gc/openapi/nrf/NFDiscovery"
 	"github.com/free5gc/openapi/nrf/NFManagement"
+	"github.com/free5gc/openapi/nwdaf/EventsSubscription"
 	"github.com/free5gc/openapi/pcf/SMPolicyControl"
 	"github.com/free5gc/openapi/smf/PDUSession"
 	"github.com/free5gc/openapi/udm/SubscriberDataManagement"
@@ -22,6 +23,7 @@ type Consumer struct {
 	*npcfService
 	*nudmService
 	*nnrfService
+	*nwdafService
 }
 
 func NewConsumer(smf app.App) (*Consumer, error) {
@@ -59,6 +61,11 @@ func NewConsumer(smf app.App) (*Consumer, error) {
 	c.npcfService = &npcfService{
 		consumer:               c,
 		SMPolicyControlClients: make(map[string]*SMPolicyControl.APIClient),
+	}
+
+	c.nwdafService = &nwdafService{
+		consumer:                c,
+		eventSubscriptionClient: make(map[string]*EventsSubscription.APIClient),
 	}
 
 	return c, nil

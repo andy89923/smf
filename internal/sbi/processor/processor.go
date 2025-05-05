@@ -23,6 +23,11 @@ type Processor struct {
 	UrrLock              sync.Mutex
 	UrrReportCount       int
 	ChargingUrrThreshold uint64
+
+	// Following fields are used for NWDAF subscription
+	NwdafLock           sync.Mutex
+	NwdafUri            string
+	NwdafSubscriptionId string
 }
 
 func NewProcessor(smf ProcessorSmf) (*Processor, error) {
@@ -30,6 +35,8 @@ func NewProcessor(smf ProcessorSmf) (*Processor, error) {
 		ProcessorSmf:         smf,
 		UrrReportCount:       0,
 		ChargingUrrThreshold: smf.Config().Configuration.UrrThreshold,
+		NwdafUri:             "",
+		NwdafSubscriptionId:  "",
 	}
 	return p, nil
 }

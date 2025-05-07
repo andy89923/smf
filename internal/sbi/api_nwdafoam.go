@@ -2,7 +2,6 @@ package sbi
 
 import (
 	"context"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"runtime"
@@ -47,11 +46,11 @@ func (s *Server) AmfOamNfResourceGet(c *gin.Context) {
 func GetNfResouces(ctx context.Context) (*models.NfResourceUsage, error) {
 
 	// Read memory usage from cgroup
-	memoryCurrent, err := ioutil.ReadFile("/sys/fs/cgroup/memory.current")
+	memoryCurrent, err := os.ReadFile("/sys/fs/cgroup/memory.current")
 	if err != nil {
 		return nil, err
 	}
-	memoryMax, err := ioutil.ReadFile("/sys/fs/cgroup/memory.max")
+	memoryMax, err := os.ReadFile("/sys/fs/cgroup/memory.max")
 	if err != nil {
 		return nil, err
 	}

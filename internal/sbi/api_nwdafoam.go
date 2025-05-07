@@ -29,12 +29,12 @@ func (s *Server) getNwdafOamRoutes() []Route {
 			Name:    "NfResourceGet",
 			Method:  http.MethodGet,
 			Pattern: "/nf-resource",
-			APIFunc: s.AmfOamNfResourceGet,
+			APIFunc: s.SmfOamNfResourceGet,
 		},
 	}
 }
 
-func (s *Server) AmfOamNfResourceGet(c *gin.Context) {
+func (s *Server) SmfOamNfResourceGet(c *gin.Context) {
 	nfResource, err := GetNfResouces(context.Background())
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
@@ -44,15 +44,18 @@ func (s *Server) AmfOamNfResourceGet(c *gin.Context) {
 }
 
 func GetNfResouces(ctx context.Context) (*models.NfResourceUsage, error) {
+	var memoryCurrent []byte
+	var memoryMax []byte
+	var errMem error
 
 	// Read memory usage from cgroup
-	memoryCurrent, err := os.ReadFile("/sys/fs/cgroup/memory.current")
-	if err != nil {
-		return nil, err
+	memoryCurrent, errMem = os.ReadFile("/sys/fs/cgroup/memory.current")
+	if errMem != nil {
+		memoryCurrent = []byte("1")
 	}
-	memoryMax, err := os.ReadFile("/sys/fs/cgroup/memory.max")
-	if err != nil {
-		return nil, err
+	memoryMax, errMem = os.ReadFile("/sys/fs/cgroup/memory.max")
+	if errMem != nil {
+		memoryMax = []byte("1")
 	}
 
 	// Convert memory values to integers

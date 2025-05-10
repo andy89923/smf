@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -197,6 +198,12 @@ func (a *SmfApp) Terminate() {
 func (a *SmfApp) terminateProcedure() {
 	logger.MainLog.Infof("Terminating SMF...")
 	a.pfcpTerminate()
+
+	// processor
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	a.Processor().Stop(ctx)
+	defer cancel()
+
 	// deregister with NRF
 	err := a.Consumer().SendDeregisterNFInstance()
 	if err != nil {

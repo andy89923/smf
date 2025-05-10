@@ -65,7 +65,7 @@ func (c *Config) Print() {
 }
 
 type Info struct {
-	Version     string `yaml:"version,omitempty" valid:"required,in(1.0.7)"`
+	Version     string `yaml:"version,omitempty" valid:"required,in(1.0.8)"`
 	Description string `yaml:"description,omitempty" valid:"type(string)"`
 }
 
@@ -92,6 +92,14 @@ type Configuration struct {
 	T3592                *TimerValue          `yaml:"t3592" valid:"required"`
 	NwInstFqdnEncoding   bool                 `yaml:"nwInstFqdnEncoding" valid:"type(bool),optional"`
 	RequestedUnit        int32                `yaml:"requestedUnit,omitempty" valid:"optional"`
+	Nwdaf                *NWDAF               `yaml:"nwdaf,omitempty" valid:"optional"`
+}
+
+type NWDAF struct {
+	Enable        bool `yaml:"enable" valid:"type(bool)"`
+	CpuThreshold  int  `yaml:"cpuThreshold,omitempty" valid:"optional"`
+	MemThreshold  int  `yaml:"memThreshold,omitempty" valid:"optional"`
+	LoadThreshold int  `yaml:"loadThreshold,omitempty" valid:"optional"`
 }
 
 type Logger struct {

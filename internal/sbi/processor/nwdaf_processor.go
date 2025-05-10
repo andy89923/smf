@@ -33,8 +33,27 @@ func (p *Processor) ReceiveNfLoadLevelAnalytics(notification *[]models.NnwdafEve
 	logger.ProcessorLog.Warnf("ReceiveNfLoadLevelAnalytics: NfLoadLevelInfo: %+v", nfLoadLevelInfo)
 	logger.ProcessorLog.Warnf("LoadLevel Peak: %+v", nfLoadLevelInfo.NfLoadLevelpeak)
 
-	// TODO: Process the nfLoadLevelInfo
-	// If the NfLoadLevelPeak is greater than the threshold, adjust the token period
+	p.NfLoadAnalyticsLock.Lock()
+	defer p.NfLoadAnalyticsLock.Unlock()
+
+	p.NfLoadAnalytics[nfLoadLevelInfo.NfType] = nfLoadLevelInfo
+
+	// TODO(ctfang): Process the nfLoadLevelInfo
+	// If the NfLoadLevelPeak is greater than the threshold, adjust the URR report threshold
+}
+
+func (p *Processor) SubscribeNfLoadIfNotExist(ctx context.Context) {
+	if p.Config().Configuration.Nwdaf.Enable == false {
+		logger.ProcessorLog.Warn("NWDAF is not enabled, no need to subscribe")
+		return
+	}
+	if p.NwdafUri == "" {
+		logger.ProcessorLog.Infoln("SubscribeNfLoadIfNotExist(): Try to subscribe to NWDAF")
+
+		p.subscribeNfLoadLevelAnalytics(ctx)
+	} else {
+		logger.ProcessorLog.Infof("NWDafUri is not empty, no need to subscribe")
+	}
 }
 
 func (p *Processor) subscribeNfLoadLevelAnalytics(ctx context.Context) {

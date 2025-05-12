@@ -105,8 +105,8 @@ func (p *Processor) UpdateChargingSessionByPfcp(smContext *smf_context.SMContext
 				urr.State = smf_context.RULE_UPDATE
 
 				// TODO: determine the volume threshold
-				// CTFang: For now, we set the volume threshold to 3000 for testing
-				urr.VolumeThreshold = 3000
+				// CTFang: For now, we set the 2 times of the volume threshold
+				urr.VolumeThreshold = urr.VolumeThreshold * 2
 			}
 		}
 
@@ -176,11 +176,15 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 			}
 		}
 
-		// TODO(CTFang): Check NF Load Status and prediction (SMF, CHF, UPF)
+		// Check NF Load Status and prediction (SMF, CHF, UPF)
 		// to deternmine whether to send the PFCP Session Modification Request
-		// go func() {
-		// 	p.UpdateChargingSessionByPfcp(smContext)
-		// }()
+		go func() {
+			if !p.CheckNwdafNfLoadCondition() {
+				logger.ChargingLog.Infoln("NWDaf NfLoadCondition is not satisfied")
+				return
+			}
+			p.UpdateChargingSessionByPfcp(smContext)
+		}()
 
 		if len(upfUrrMap) == 0 {
 			logger.ChargingLog.Warnln("Do not have urr that need to update charging information")

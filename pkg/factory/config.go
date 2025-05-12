@@ -96,10 +96,10 @@ type Configuration struct {
 }
 
 type NWDAF struct {
-	Enable        bool `yaml:"enable" valid:"type(bool)"`
-	CpuThreshold  int  `yaml:"cpuThreshold,omitempty" valid:"optional"`
-	MemThreshold  int  `yaml:"memThreshold,omitempty" valid:"optional"`
-	LoadThreshold int  `yaml:"loadThreshold,omitempty" valid:"optional"`
+	Enable        bool  `yaml:"enable" valid:"type(bool)"`
+	CpuThreshold  int32 `yaml:"cpuThreshold,omitempty" valid:"optional"`
+	MemThreshold  int32 `yaml:"memThreshold,omitempty" valid:"optional"`
+	LoadThreshold int32 `yaml:"loadThreshold,omitempty" valid:"optional"`
 }
 
 type Logger struct {

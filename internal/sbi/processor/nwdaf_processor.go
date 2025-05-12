@@ -114,3 +114,61 @@ func (p *Processor) deleteSubscriptions(ctx context.Context) {
 	logger.ProcessorLog.Infof("DeleteEventSubscription success: %s", p.NwdafSubscriptionId)
 	p.NwdafSubscriptionId = ""
 }
+
+// Check whether the condition is met
+// If the condition is met, return true
+func (p *Processor) CheckNwdafNfLoadCondition() bool {
+	if p.Config().Configuration.Nwdaf.Enable == false {
+		return false
+	}
+
+	cfg := p.Config().Configuration.Nwdaf
+	if cfg.LoadThreshold == 0 && cfg.CpuThreshold == 0 && cfg.MemThreshold == 0 {
+		logger.ProcessorLog.Warn("Nwdaf Load Condition is not set")
+		return false
+	}
+
+	if chfLoad, ok := p.NfLoadAnalytics[models.NrfNfManagementNfType_CHF]; ok {
+		if cfg.LoadThreshold != 0 && chfLoad.NfLoadLevelAverage > cfg.LoadThreshold {
+			logger.ProcessorLog.Warnf("CHF Load Level is %d", chfLoad.NfLoadLevelAverage)
+			return true
+		}
+		if cfg.CpuThreshold != 0 && chfLoad.NfCpuUsage > cfg.CpuThreshold {
+			logger.ProcessorLog.Warnf("CHF CPU Usage is %d", chfLoad.NfCpuUsage)
+			return true
+		}
+		if cfg.MemThreshold != 0 && chfLoad.NfMemoryUsage > cfg.MemThreshold {
+			logger.ProcessorLog.Warnf("CHF Memory Usage is %d", chfLoad.NfMemoryUsage)
+			return true
+		}
+	}
+	if smfLoad, ok := p.NfLoadAnalytics[models.NrfNfManagementNfType_SMF]; ok {
+		if cfg.LoadThreshold != 0 && smfLoad.NfLoadLevelAverage > cfg.LoadThreshold {
+			logger.ProcessorLog.Warnf("SMF Load Level is %d", smfLoad.NfLoadLevelAverage)
+			return true
+		}
+		if cfg.CpuThreshold != 0 && smfLoad.NfCpuUsage > cfg.CpuThreshold {
+			logger.ProcessorLog.Warnf("SMF CPU Usage is %d", smfLoad.NfCpuUsage)
+			return true
+		}
+		if cfg.MemThreshold != 0 && smfLoad.NfMemoryUsage > cfg.MemThreshold {
+			logger.ProcessorLog.Warnf("SMF Memory Usage is %d", smfLoad.NfMemoryUsage)
+			return true
+		}
+	}
+	if upfLoad, ok := p.NfLoadAnalytics[models.NrfNfManagementNfType_UPF]; ok {
+		if cfg.LoadThreshold != 0 && upfLoad.NfLoadLevelAverage > cfg.LoadThreshold {
+			logger.ProcessorLog.Warnf("UPF Load Level is %d", upfLoad.NfLoadLevelAverage)
+			return true
+		}
+		if cfg.CpuThreshold != 0 && upfLoad.NfCpuUsage > cfg.CpuThreshold {
+			logger.ProcessorLog.Warnf("UPF CPU Usage is %d", upfLoad.NfCpuUsage)
+			return true
+		}
+		if cfg.MemThreshold != 0 && upfLoad.NfMemoryUsage > cfg.MemThreshold {
+			logger.ProcessorLog.Warnf("UPF Memory Usage is %d", upfLoad.NfMemoryUsage)
+			return true
+		}
+	}
+	return false
+}

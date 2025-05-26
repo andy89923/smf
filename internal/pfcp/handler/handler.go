@@ -204,13 +204,13 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 
 		// CTFang: This is a temporary solution to count the number of PFCP Session Report Requests
 		// and print it to the log.
-		go func() {
-			pfcpSessionReportRequestCountLock.Lock()
-			defer pfcpSessionReportRequestCountLock.Unlock()
+		// go func() {
+		// 	pfcpSessionReportRequestCountLock.Lock()
+		// 	defer pfcpSessionReportRequestCountLock.Unlock()
 
-			pfcpSessionReportRequestCount++
-			logger.PfcpLog.Warnf("PFCP Session Report Request count: %d", pfcpSessionReportRequestCount)
-		}()
+		// 	pfcpSessionReportRequestCount++
+		// 	logger.PfcpLog.Warnf("PFCP Session Report Request count: %d", pfcpSessionReportRequestCount)
+		// }()
 	}
 
 	// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF

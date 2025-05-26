@@ -23,10 +23,15 @@ import (
 )
 
 var (
+	// TODO(ctfang): this pool save all SMContext, can modify PDU session use this pool
 	smContextPool    sync.Map // key: ref, value: *SMContext
 	canonicalRef     sync.Map
 	seidSMContextMap sync.Map
 )
+
+func GetSmContextPool() *sync.Map {
+	return &smContextPool
+}
 
 type DLForwardingType int
 

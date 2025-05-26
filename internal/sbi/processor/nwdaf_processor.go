@@ -6,6 +6,8 @@ import (
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
+
+	smfContext "github.com/free5gc/smf/internal/context"
 )
 
 func (p *Processor) ReceiveNfLoadLevelAnalytics(notification *[]models.NnwdafEventsSubscriptionNotification) {
@@ -30,16 +32,45 @@ func (p *Processor) ReceiveNfLoadLevelAnalytics(notification *[]models.NnwdafEve
 		return
 	}
 
-	logger.ProcessorLog.Warnf("ReceiveNfLoadLevelAnalytics: NfLoadLevelInfo: %+v", nfLoadLevelInfo)
-	logger.ProcessorLog.Warnf("LoadLevel Peak: %+v", nfLoadLevelInfo.NfLoadLevelpeak)
+	// logger.ProcessorLog.Warnf("ReceiveNfLoadLevelAnalytics: NfLoadLevelInfo: %+v", nfLoadLevelInfo)
+	// logger.ProcessorLog.Warnf("LoadLevel Peak: %+v", nfLoadLevelInfo.NfLoadLevelpeak)
 
 	p.NfLoadAnalyticsLock.Lock()
 	defer p.NfLoadAnalyticsLock.Unlock()
 
 	p.NfLoadAnalytics[nfLoadLevelInfo.NfType] = nfLoadLevelInfo
 
-	// TODO(ctfang): Process the nfLoadLevelInfo
-	// If the NfLoadLevelPeak is greater than the threshold, adjust the URR report threshold
+	p.UrrLock.Lock()
+	defer p.UrrLock.Unlock()
+
+	// Determine the urr threshold based on the NfLoadLevel
+	newVolume := p.ChargingUrrThreshold
+	if p.CheckNwdafNfLoadConditionHigh() {
+		newVolume = uint64(float64(p.ChargingUrrThreshold) * 1.5) // Increase by 50%
+	} else if p.CheckNwdafNfLoadConditionLow() {
+		newVolume = uint64(float64(p.ChargingUrrThreshold) / 1.5)         // Decrease by 50%
+		newVolume = max(newVolume, p.Config().Configuration.UrrThreshold) // Ensure it doesn't go below the configured threshold
+	}
+	update := newVolume != p.ChargingUrrThreshold
+	if !update {
+		// logger.ProcessorLog.Warnln("NfLoad Condition not met.")
+		return
+	}
+	logger.ProcessorLog.Warnf("NfLoad Condition met, updating charging sessions[%d -> %d]!", p.ChargingUrrThreshold, newVolume)
+	p.ChargingUrrThreshold = newVolume
+
+	smContextPool := smfContext.GetSmContextPool()
+	smContextPool.Range(
+		func(key, value any) bool {
+			smContext, ok := value.(*smfContext.SMContext)
+			if !ok {
+				logger.ProcessorLog.Errorf("ReceiveNfLoadLevelAnalytics: key %s is not a SmContext", key)
+				return true // continue iterating
+			}
+			p.updateChargingSessionByPfcp(smContext)
+			return true // return false to stop iterating early
+		})
+	logger.ProcessorLog.Warnf("Updated charging sessions with new urrThreshold: %d", p.ChargingUrrThreshold)
 }
 
 func (p *Processor) SubscribeNfLoadIfNotExist(ctx context.Context) {
@@ -115,14 +146,14 @@ func (p *Processor) deleteSubscriptions(ctx context.Context) {
 	p.NwdafSubscriptionId = ""
 }
 
-// Check whether the condition is met
+// CTFANG: Check whether the condition is met
 // If the condition is met, return true
-func (p *Processor) CheckNwdafNfLoadCondition() bool {
+func (p *Processor) CheckNwdafNfLoadConditionHigh() bool {
 	if p.Config().Configuration.Nwdaf.Enable == false {
 		return false
 	}
 
-	cfg := p.Config().Configuration.Nwdaf
+	cfg := p.Config().Configuration.Nwdaf.High
 	if cfg.LoadThreshold == 0 && cfg.CpuThreshold == 0 && cfg.MemThreshold == 0 {
 		logger.ProcessorLog.Warn("Nwdaf Load Condition is not set")
 		return false
@@ -166,6 +197,62 @@ func (p *Processor) CheckNwdafNfLoadCondition() bool {
 			return true
 		}
 		if cfg.MemThreshold != 0 && upfLoad.NfMemoryUsage > cfg.MemThreshold {
+			logger.ProcessorLog.Warnf("UPF Memory Usage is %d", upfLoad.NfMemoryUsage)
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Processor) CheckNwdafNfLoadConditionLow() bool {
+	if p.Config().Configuration.Nwdaf.Enable == false {
+		return false
+	}
+
+	cfg := p.Config().Configuration.Nwdaf.Low
+	if cfg.LoadThreshold == 0 && cfg.CpuThreshold == 0 && cfg.MemThreshold == 0 {
+		logger.ProcessorLog.Warn("Nwdaf Load Condition is not set")
+		return false
+	}
+
+	if chfLoad, ok := p.NfLoadAnalytics[models.NrfNfManagementNfType_CHF]; ok {
+		if cfg.LoadThreshold != 0 && chfLoad.NfLoadLevelAverage < cfg.LoadThreshold {
+			logger.ProcessorLog.Warnf("CHF Load Level is %d", chfLoad.NfLoadLevelAverage)
+			return true
+		}
+		if cfg.CpuThreshold != 0 && chfLoad.NfCpuUsage < cfg.CpuThreshold {
+			logger.ProcessorLog.Warnf("CHF CPU Usage is %d", chfLoad.NfCpuUsage)
+			return true
+		}
+		if cfg.MemThreshold != 0 && chfLoad.NfMemoryUsage < cfg.MemThreshold {
+			logger.ProcessorLog.Warnf("CHF Memory Usage is %d", chfLoad.NfMemoryUsage)
+			return true
+		}
+	}
+	if smfLoad, ok := p.NfLoadAnalytics[models.NrfNfManagementNfType_SMF]; ok {
+		if cfg.LoadThreshold != 0 && smfLoad.NfLoadLevelAverage < cfg.LoadThreshold {
+			logger.ProcessorLog.Warnf("SMF Load Level is %d", smfLoad.NfLoadLevelAverage)
+			return true
+		}
+		if cfg.CpuThreshold != 0 && smfLoad.NfCpuUsage < cfg.CpuThreshold {
+			logger.ProcessorLog.Warnf("SMF CPU Usage is %d", smfLoad.NfCpuUsage)
+			return true
+		}
+		if cfg.MemThreshold != 0 && smfLoad.NfMemoryUsage < cfg.MemThreshold {
+			logger.ProcessorLog.Warnf("SMF Memory Usage is %d", smfLoad.NfMemoryUsage)
+			return true
+		}
+	}
+	if upfLoad, ok := p.NfLoadAnalytics[models.NrfNfManagementNfType_UPF]; ok {
+		if cfg.LoadThreshold != 0 && upfLoad.NfLoadLevelAverage < cfg.LoadThreshold {
+			logger.ProcessorLog.Warnf("UPF Load Level is %d", upfLoad.NfLoadLevelAverage)
+			return true
+		}
+		if cfg.CpuThreshold != 0 && upfLoad.NfCpuUsage < cfg.CpuThreshold {
+			logger.ProcessorLog.Warnf("UPF CPU Usage is %d", upfLoad.NfCpuUsage)
+			return true
+		}
+		if cfg.MemThreshold != 0 && upfLoad.NfMemoryUsage < cfg.MemThreshold {
 			logger.ProcessorLog.Warnf("UPF Memory Usage is %d", upfLoad.NfMemoryUsage)
 			return true
 		}

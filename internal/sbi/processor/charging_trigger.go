@@ -75,13 +75,13 @@ func (p *Processor) ReleaseChargingSession(smContext *smf_context.SMContext) {
 	}
 }
 
-func (p *Processor) UpdateChargingSessionByPfcp(smContext *smf_context.SMContext) {
+func (p *Processor) updateChargingSessionByPfcp(smContext *smf_context.SMContext) {
 	// TODO
 	// Now only send modification for the chariging URR in SM Context (URR ID: 7, 8)
 	// Later, we need to send the modification for default URR (URR ID: 1 ~ 6)
 	// Code for now is removed 1 ~ 6 in other place
 
-	logger.ChargingLog.Errorln("Test: Send Update URR via PFCP SessionModification")
+	// logger.ChargingLog.Errorln("Test: Send Update URR via PFCP SessionModification")
 
 	upfUrrMap := make(map[string][]*smf_context.URR)
 	for _, urr := range smContext.UrrUpfMap {
@@ -90,6 +90,8 @@ func (p *Processor) UpdateChargingSessionByPfcp(smContext *smf_context.SMContext
 		upfId := smContext.ChargingInfo[urr.URRID].UpfId
 		upfUrrMap[upfId] = append(upfUrrMap[upfId], urr)
 	}
+
+	newVolume := p.ChargingUrrThreshold
 
 	for upfId, urrList := range upfUrrMap {
 		upf := smf_context.GetUpfById(upfId)
@@ -100,13 +102,11 @@ func (p *Processor) UpdateChargingSessionByPfcp(smContext *smf_context.SMContext
 
 		// Update urrList urr attributes
 		for _, urr := range urrList {
-			logger.ChargingLog.Warnf("%+v", urr)
+			// logger.ChargingLog.Warnf("%+v", urr)
 			if urr.MeasureMethod == "vol" {
 				urr.State = smf_context.RULE_UPDATE
 
-				// TODO: determine the volume threshold
-				// CTFang: For now, we set the 2 times of the volume threshold
-				urr.VolumeThreshold = urr.VolumeThreshold * 2
+				urr.VolumeThreshold = newVolume
 			}
 		}
 
@@ -132,7 +132,7 @@ func (p *Processor) UpdateChargingSessionByPfcp(smContext *smf_context.SMContext
 
 		switch pfcpResponseStatus {
 		case smf_context.SessionUpdateSuccess:
-			logger.PfcpLog.Infoln("UpdateChargingSessionByPfcp SessionUpdateSuccess")
+			logger.PfcpLog.Infof("UpdateChargingSessionByPfcp SessionUpdateSuccess %v", newVolume)
 			smContext.SetState(smf_context.Active)
 		case smf_context.SessionUpdateFailed:
 			logger.PfcpLog.Errorln("UpdateChargingSessionByPfcp SessionUpdateFailed")
@@ -163,7 +163,7 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 
 		upfUrrMap := make(map[string][]*smf_context.URR)
 
-		logger.ChargingLog.Infof("Send Charging Data Request[Update] successfully")
+		// logger.ChargingLog.Infof("Send Charging Data Request[Update] successfully")
 		smContext.SetState(smf_context.PFCPModification)
 
 		p.updateGrantedQuota(smContext, rsp.MultipleUnitInformation)
@@ -176,18 +176,19 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 			}
 		}
 
-		// Check NF Load Status and prediction (SMF, CHF, UPF)
+		// CTFANG: Check NF Load Status and prediction (SMF, CHF, UPF)
 		// to deternmine whether to send the PFCP Session Modification Request
-		go func() {
-			if !p.CheckNwdafNfLoadCondition() {
-				logger.ChargingLog.Infoln("NWDaf NfLoadCondition is not satisfied")
-				return
-			}
-			p.UpdateChargingSessionByPfcp(smContext)
-		}()
+		// Test code (05/24/2023)
+		// go func() {
+		// 	if !p.CheckNwdafNfLoadCondition() {
+		// 		logger.ChargingLog.Infoln("NWDaf NfLoadCondition is not satisfied")
+		// 		return
+		// 	}
+		// 	p.updateChargingSessionByPfcp(smContext)
+		// }()
 
 		if len(upfUrrMap) == 0 {
-			logger.ChargingLog.Warnln("Do not have urr that need to update charging information")
+			// logger.ChargingLog.Warnln("Do not have urr that need to update charging information")
 			return
 		}
 
@@ -228,7 +229,7 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 func buildMultiUnitUsageFromUsageReport(
 	smContext *smf_context.SMContext,
 ) []models.ChfConvergedChargingMultipleUnitUsage {
-	logger.ChargingLog.Infof("build MultiUnitUsageFromUsageReport")
+	// logger.ChargingLog.Infof("build MultiUnitUsageFromUsageReport")
 
 	var ratingGroupUnitUsagesMap map[int32]models.ChfConvergedChargingMultipleUnitUsage
 	var multipleUnitUsage []models.ChfConvergedChargingMultipleUnitUsage

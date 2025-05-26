@@ -96,7 +96,12 @@ type Configuration struct {
 }
 
 type NWDAF struct {
-	Enable        bool  `yaml:"enable" valid:"type(bool)"`
+	Enable bool            `yaml:"enable" valid:"type(bool)"`
+	High   NfLoadThreshold `yaml:"high,omitempty" valid:"optional"`
+	Low    NfLoadThreshold `yaml:"low,omitempty" valid:"optional"`
+}
+
+type NfLoadThreshold struct {
 	CpuThreshold  int32 `yaml:"cpuThreshold,omitempty" valid:"optional"`
 	MemThreshold  int32 `yaml:"memThreshold,omitempty" valid:"optional"`
 	LoadThreshold int32 `yaml:"loadThreshold,omitempty" valid:"optional"`

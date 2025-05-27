@@ -96,9 +96,10 @@ type Configuration struct {
 }
 
 type NWDAF struct {
-	Enable bool            `yaml:"enable" valid:"type(bool)"`
-	High   NfLoadThreshold `yaml:"high,omitempty" valid:"optional"`
-	Low    NfLoadThreshold `yaml:"low,omitempty" valid:"optional"`
+	Enable          bool            `yaml:"enable" valid:"type(bool)"`
+	MaxUrrThreshold uint64          `yaml:"maxUrrThreshold,omitempty" valid:"optional"`
+	High            NfLoadThreshold `yaml:"high,omitempty" valid:"optional"`
+	Low             NfLoadThreshold `yaml:"low,omitempty" valid:"optional"`
 }
 
 type NfLoadThreshold struct {

@@ -98,3 +98,14 @@ func (u *Ues) GetPduSessionCount(ueId string) int {
 
 	return u.ues[ueId].PduSessionCount
 }
+
+func (u *Ues) GetTotalPduSessionCount() int {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	count := 0
+	for _, ueData := range u.ues {
+		count += ueData.PduSessionCount
+	}
+	return count
+}

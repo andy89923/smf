@@ -7,8 +7,11 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/free5gc/nwdaf/pkg/components"
+	nwdafModels "github.com/free5gc/nwdaf/pkg/models"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
+
+	smfcontext "github.com/free5gc/smf/internal/context"
 )
 
 func (s *Server) getNwdafOamRoutes() []Route {
@@ -28,12 +31,50 @@ func (s *Server) getNwdafOamRoutes() []Route {
 			APIFunc: s.SmfOamNfResourceGet,
 		},
 		{
+			Name:    "SMF NF_Load Resouce",
+			Method:  http.MethodGet,
+			Pattern: "/nf-load",
+			APIFunc: s.SmfNfLoadOamGet,
+		},
+		{
 			Name:    "NfLoadLevelAnalyticsNotification",
 			Method:  http.MethodPost,
 			Pattern: "/callback",
 			APIFunc: s.NfLoadLevelAnalyticsNotification,
 		},
 	}
+}
+
+func (s *Server) SmfNfLoadOamGet(c *gin.Context) {
+	ues := s.Context().GetUesData()
+	totalPduCount := ues.GetTotalPduSessionCount()
+
+	smContextPool := smfcontext.GetSmContextPool()
+	poolSize := 0
+	smContextPool.Range(
+		func(key, value any) bool {
+			poolSize++
+			return true // return false to stop iterating early
+		})
+
+	urrThreshold := s.Processor().ChargingUrrThreshold
+
+	nfResource, err := components.GetNfResouces(context.Background())
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	smfNfLoadOam := nwdafModels.SmfNfLoadOamResponse{
+		NfResource:    *nfResource,
+		UrrThresholds: urrThreshold,
+		NumSmContext:  uint64(poolSize),
+		NumPduSession: totalPduCount,
+	}
+
+	// logger.SBILog.Warnf("SmfNfLoadOamResponse: %+v", smfNfLoadOam)
+
+	c.JSON(http.StatusOK, smfNfLoadOam)
 }
 
 func (s *Server) SmfOamNfResourceGet(c *gin.Context) {

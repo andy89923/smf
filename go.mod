@@ -8,7 +8,7 @@ require (
 	github.com/free5gc/aper v1.0.6-0.20250102035630-3ddc831eed6a
 	github.com/free5gc/nas v1.1.5
 	github.com/free5gc/ngap v1.0.10
-	github.com/free5gc/nwdaf v0.0.0-20250507064323-dab3075efe19
+	github.com/free5gc/nwdaf v0.0.0-20250527035049-2992f5986315
 	github.com/free5gc/openapi v1.1.0
 	github.com/free5gc/pfcp v1.0.7
 	github.com/free5gc/util v1.0.6

@@ -290,6 +290,10 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 	}
 }
 
+func (c *SMFContext) GetUesData() *Ues {
+	return c.Ues
+}
+
 func GetSelf() *SMFContext {
 	return &smfContext
 }

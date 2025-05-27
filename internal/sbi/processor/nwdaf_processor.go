@@ -47,6 +47,7 @@ func (p *Processor) ReceiveNfLoadLevelAnalytics(notification *[]models.NnwdafEve
 	newVolume := p.ChargingUrrThreshold
 	if p.CheckNwdafNfLoadConditionHigh() {
 		newVolume = uint64(float64(p.ChargingUrrThreshold) * 1.5) // Increase by 50%
+		newVolume = min(newVolume, p.Config().Configuration.Nwdaf.MaxUrrThreshold)
 	} else if p.CheckNwdafNfLoadConditionLow() {
 		newVolume = uint64(float64(p.ChargingUrrThreshold) / 1.5)         // Decrease by 50%
 		newVolume = max(newVolume, p.Config().Configuration.UrrThreshold) // Ensure it doesn't go below the configured threshold

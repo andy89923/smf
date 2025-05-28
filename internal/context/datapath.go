@@ -431,8 +431,8 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 		// Create Default URR ID 1 ~ 6
 		// CTFang: remove default URR for now (testing)
 		// dataPath.addUrrToPath(smContext)
-		logger.PduSessLog.Warnf("Create URR: UrrReportTime [%v],  UrrReportThreshold: [%v]",
-			smContext.UrrReportTime, smContext.UrrReportThreshold)
+		// logger.PduSessLog.Warnf("Create URR: UrrReportTime [%v],  UrrReportThreshold: [%v]",
+		// 	smContext.UrrReportTime, smContext.UrrReportThreshold)
 	} else {
 		logger.PduSessLog.Warn("No Create URR")
 	}

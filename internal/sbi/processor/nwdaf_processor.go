@@ -32,9 +32,6 @@ func (p *Processor) ReceiveNfLoadLevelAnalytics(notification *[]models.NnwdafEve
 		return
 	}
 
-	// logger.ProcessorLog.Warnf("ReceiveNfLoadLevelAnalytics: NfLoadLevelInfo: %+v", nfLoadLevelInfo)
-	// logger.ProcessorLog.Warnf("LoadLevel Peak: %+v", nfLoadLevelInfo.NfLoadLevelpeak)
-
 	p.NfLoadAnalyticsLock.Lock()
 	defer p.NfLoadAnalyticsLock.Unlock()
 
@@ -46,8 +43,8 @@ func (p *Processor) ReceiveNfLoadLevelAnalytics(notification *[]models.NnwdafEve
 	// Determine the urr threshold based on the NfLoadLevel
 	newVolume := p.ChargingUrrThreshold
 	if p.CheckNwdafNfLoadConditionHigh() {
-		newVolume = uint64(float64(p.ChargingUrrThreshold) * 1.5) // Increase by 50%
-		newVolume = min(newVolume, p.Config().Configuration.Nwdaf.MaxUrrThreshold)
+		newVolume = uint64(float64(p.ChargingUrrThreshold) * 1.5)                  // Increase by 50%
+		newVolume = min(newVolume, p.Config().Configuration.Nwdaf.MaxUrrThreshold) // Ensure it doesn't exceed the configured maximum threshold
 	} else if p.CheckNwdafNfLoadConditionLow() {
 		newVolume = uint64(float64(p.ChargingUrrThreshold) / 1.5)         // Decrease by 50%
 		newVolume = max(newVolume, p.Config().Configuration.UrrThreshold) // Ensure it doesn't go below the configured threshold

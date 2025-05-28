@@ -75,6 +75,8 @@ func (s *Server) SmfNfLoadOamGet(c *gin.Context) {
 	// logger.SBILog.Warnf("SmfNfLoadOamResponse: %+v", smfNfLoadOam)
 
 	c.JSON(http.StatusOK, smfNfLoadOam)
+
+	go s.Processor().SubscribeNfLoadIfNotExist(s.CancelContext())
 }
 
 func (s *Server) SmfOamNfResourceGet(c *gin.Context) {
